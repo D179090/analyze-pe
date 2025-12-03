@@ -15,6 +15,15 @@ func usage() {
 	fmt.Println("Example: analyzer C:\\Binaries\\notepad.exe")
 }
 
+func help() {
+	fmt.Println("Usage: analyzer <file.exe|file.dll>")
+	fmt.Println("Example: analyzer C:\\Binaries\\notepad.exe")
+	fmt.Println("Options:")
+	fmt.Println("  -h, --help    Show this help message and exit")
+	fmt.Println("  -i, --imports Show imports")
+	fmt.Println("  -s, --sections Show sections")
+}
+
 func sectionName(sec peparser.Section) string {
 	nameBytes := sec.Header.Name[:]
 	n := bytes.IndexByte(nameBytes, 0)
@@ -93,7 +102,7 @@ func main() {
 	firstArgument := os.Args[1]
 
 	if firstArgument == "help" || firstArgument == "--help" || firstArgument == "-h" {
-		usage()
+		help()
 		return
 	}
 
@@ -112,6 +121,13 @@ func main() {
 	if firstArgument == "imports" || firstArgument == "--imports" || firstArgument == "-i" {
 		if err := importsPE(firstArgument); err != nil {
 			fmt.Printf("Imports extraction error: %v\n", err)
+			os.Exit(1)
+		}
+	}
+
+	if firstArgument == "sections" || firstArgument == "--sections" || firstArgument == "-s" {
+		if err := sectionsPE(firstArgument); err != nil {
+			fmt.Printf("Sections extraction error: %v\n", err)
 			os.Exit(1)
 		}
 	}
