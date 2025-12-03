@@ -2,18 +2,16 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
 
+	"github.com/glaslos/ssdeep"
 	peparser "github.com/saferwall/pe"
 )
-
-/*func usage() {
-	fmt.Println("Usage: analyzer <option> <file.exe|file.dll>")
-	fmt.Println("Example: analyzer -s C:\\Binaries\\notepad.exe")
-}*/
 
 func help() {
 	fmt.Println("Usage: analyzer <option> <file.exe|file.dll>")
@@ -21,6 +19,7 @@ func help() {
 	fmt.Println("  -h, --help       Show this help message and exit")
 	fmt.Println("  -i, --imports    Show imports")
 	fmt.Println("  -s, --sections   Show sections")
+	fmt.Println("  -b, --basic      Show basic information (SHA256, SSDEEP, size, machine)")
 }
 
 func sectionName(sec peparser.Section) string {
@@ -30,6 +29,72 @@ func sectionName(sec peparser.Section) string {
 		n = len(nameBytes)
 	}
 	return string(nameBytes[:n])
+}
+
+func basicInfo(filename string) error {
+
+	// SHA256
+	sha256sum, err := fileSHA256(filename)
+	if err != nil {
+		return fmt.Errorf("error calculating sha256: %v", err)
+	}
+
+	// SSDEEP
+	ssdeepSum, err := fileSSDEEP(filename)
+	if err != nil {
+		return fmt.Errorf("error calculating ssdeep: %v", err)
+	}
+
+	// SIZE
+	st, err := os.Stat(filename)
+	if err != nil {
+		return fmt.Errorf("stat error: %v", err)
+	}
+
+	// MACHINE (PE header)
+	f, err := peparser.New(filename, &peparser.Options{})
+	if err != nil {
+		return fmt.Errorf("error opening PE: %v", err)
+	}
+	if err := f.Parse(); err != nil {
+		return fmt.Errorf("error parsing PE: %v", err)
+	}
+
+	machine := f.NtHeader.FileHeader.Machine.String()
+
+	// OUTPUT BASIC INFO
+	fmt.Printf("Basic info for %s:\n", filename)
+	fmt.Println("--------------------------------------")
+	fmt.Printf("File size:   %d bytes\n", st.Size())
+	fmt.Printf("Machine:     %s\n", machine)
+	fmt.Printf("SHA256:      %s\n", sha256sum)
+	fmt.Printf("SSDEEP:      %s\n", ssdeepSum)
+	fmt.Printf("Sections:    %d\n", len(f.Sections))
+	fmt.Println("--------------------------------------")
+
+	return nil
+}
+
+// Calculate SHA256
+func fileSHA256(filename string) (string, error) {
+	f, err := os.Open(filename)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", err
+	}
+
+	sum := h.Sum(nil)
+	return fmt.Sprintf("%x", sum), nil
+}
+
+// Calculate SSDEEP
+func fileSSDEEP(filename string) (string, error) {
+	return ssdeep.FuzzyFilename(filename)
 }
 
 func sectionsPE(filename string) error {
@@ -90,6 +155,24 @@ func importsPE(filename string) error {
 
 func main() {
 
+	// Если только один аргумент — file.exe → выводим basic info
+	if len(os.Args) == 2 {
+		filename := os.Args[1]
+
+		if strings.HasSuffix(strings.ToLower(filename), ".exe") ||
+			strings.HasSuffix(strings.ToLower(filename), ".dll") {
+
+			if err := basicInfo(filename); err != nil {
+				fmt.Println("Error:", err)
+			}
+			return
+		}
+
+		fmt.Println("Invalid usage. Expected option or .exe/.dll file.")
+		help()
+		return
+	}
+
 	// Проверка количества аргументов
 	if len(os.Args) < 3 {
 		help()
@@ -121,6 +204,12 @@ func main() {
 	case "-i", "--imports":
 		if err := importsPE(filename); err != nil {
 			fmt.Printf("Imports extraction error: %v\n", err)
+			os.Exit(1)
+		}
+
+	case "-b", "--basic":
+		if err := basicInfo(filename); err != nil {
+			fmt.Printf("Basic info error: %v\n", err)
 			os.Exit(1)
 		}
 
