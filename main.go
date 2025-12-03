@@ -10,18 +10,17 @@ import (
 	peparser "github.com/saferwall/pe"
 )
 
-func usage() {
-	fmt.Println("Usage: analyzer <file.exe|file.dll>")
-	fmt.Println("Example: analyzer C:\\Binaries\\notepad.exe")
-}
+/*func usage() {
+	fmt.Println("Usage: analyzer <option> <file.exe|file.dll>")
+	fmt.Println("Example: analyzer -s C:\\Binaries\\notepad.exe")
+}*/
 
 func help() {
-	fmt.Println("Usage: analyzer <file.exe|file.dll>")
-	fmt.Println("Example: analyzer C:\\Binaries\\notepad.exe")
+	fmt.Println("Usage: analyzer <option> <file.exe|file.dll>")
 	fmt.Println("Options:")
-	fmt.Println("  -h, --help    Show this help message and exit")
-	fmt.Println("  -i, --imports Show imports")
-	fmt.Println("  -s, --sections Show sections")
+	fmt.Println("  -h, --help       Show this help message and exit")
+	fmt.Println("  -i, --imports    Show imports")
+	fmt.Println("  -s, --sections   Show sections")
 }
 
 func sectionName(sec peparser.Section) string {
@@ -33,8 +32,7 @@ func sectionName(sec peparser.Section) string {
 	return string(nameBytes[:n])
 }
 
-// analyzePE открывает и парсит PE-файл и выводит простую информацию о секциях.
-func analyzePE(filename string) error {
+func sectionsPE(filename string) error {
 	f, err := peparser.New(filename, &peparser.Options{})
 	if err != nil {
 		return fmt.Errorf("error opening file: %w", err)
@@ -51,7 +49,7 @@ func analyzePE(filename string) error {
 		name := sectionName(sec)
 		vsize := sec.Header.VirtualSize
 		char := sec.Header.Characteristics
-		entropy := sec.CalculateEntropy(f) // согласно документации
+		entropy := sec.CalculateEntropy(f)
 
 		fmt.Printf("Section Name: %s\n", name)
 		fmt.Printf("  VirtualSize: 0x%x\n", vsize)
@@ -62,13 +60,11 @@ func analyzePE(filename string) error {
 	return nil
 }
 
-// importsPE выводит таблицу импортов.
 func importsPE(filename string) error {
 	f, err := peparser.New(filename, &peparser.Options{})
 	if err != nil {
 		return fmt.Errorf("error opening file: %w", err)
 	}
-
 	if err := f.Parse(); err != nil {
 		return fmt.Errorf("error parsing PE: %w", err)
 	}
@@ -93,42 +89,43 @@ func importsPE(filename string) error {
 }
 
 func main() {
-	if len(os.Args) < 2 {
-		usage()
-		fmt.Println("No arguments provided")
-		return
-	}
 
-	firstArgument := os.Args[1]
-
-	if firstArgument == "help" || firstArgument == "--help" || firstArgument == "-h" {
+	// Проверка количества аргументов
+	if len(os.Args) < 3 {
 		help()
-		return
-	}
-
-	lower := strings.ToLower(firstArgument)
-	if !strings.Contains(lower, ".exe") && !strings.Contains(lower, ".dll") {
-		fmt.Println("Unsupported file type. Expected .exe or .dll")
-		usage()
-		return
-	}
-
-	if err := analyzePE(firstArgument); err != nil {
-		fmt.Printf("Analysis error: %v\n", err)
 		os.Exit(1)
 	}
 
-	if firstArgument == "imports" || firstArgument == "--imports" || firstArgument == "-i" {
-		if err := importsPE(firstArgument); err != nil {
-			fmt.Printf("Imports extraction error: %v\n", err)
-			os.Exit(1)
-		}
+	flag := os.Args[1]
+	filename := os.Args[2]
+
+	// Проверка расширения файла
+	lower := strings.ToLower(filename)
+	if !strings.HasSuffix(lower, ".exe") && !strings.HasSuffix(lower, ".dll") {
+		fmt.Println("Unsupported file type. Expected .exe or .dll")
+		return
 	}
 
-	if firstArgument == "sections" || firstArgument == "--sections" || firstArgument == "-s" {
-		if err := sectionsPE(firstArgument); err != nil {
+	switch flag {
+
+	case "-h", "--help":
+		help()
+		return
+
+	case "-s", "--sections":
+		if err := sectionsPE(filename); err != nil {
 			fmt.Printf("Sections extraction error: %v\n", err)
 			os.Exit(1)
 		}
+
+	case "-i", "--imports":
+		if err := importsPE(filename); err != nil {
+			fmt.Printf("Imports extraction error: %v\n", err)
+			os.Exit(1)
+		}
+
+	default:
+		fmt.Printf("Unknown option: %s\n", flag)
+		help()
 	}
 }
