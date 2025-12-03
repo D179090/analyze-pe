@@ -31,7 +31,7 @@ cd analyze-pe
 
 ### 2. Сборка
 ```bash
-go build -o analyze-pe
+go build -o analyze-pe main.go
 ```
 
 ---
